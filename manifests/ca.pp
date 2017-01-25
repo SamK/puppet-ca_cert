@@ -94,14 +94,21 @@ define ca_cert::ca (
           }
         }
         'ftp', 'https', 'http': {
-          $verify_https = $verify_https_cert ? {
+          $verify_https_wget = $verify_https_cert ? {
             true  => '',
             false => '--no-check-certificate',
           }
+          $verify_https_curl = $verify_https_cert ? {
+            true  => '',
+            false => '--insecure',
+          }
           exec { "get_${resource_name}":
-            command =>
-              "wget ${verify_https} -O '${ca_cert}' '${source}' 2> /dev/null || rm -f '${ca_cert}'",
+            command => join([
+              "(type wget >/dev/null 2>&1 && (wget ${verify_https_wget} -O ${ca_cert} ${source} 2> /dev/null || rm -f '${ca_cert}')) || ",
+              "(type curl >/dev/null 2>&1 && (curl  ${verify_https_curl} ${source} > ${ca_cert} || rm -f '${ca_cert}' )) || ",
+              '( >&2 echo "error Cannot find wget nor curl" ; false )' ], ' '),
             path    => ['/usr/bin', '/bin'],
+            provider => shell,
             creates => $ca_cert,
             notify  => Exec['ca_cert_update'],
           }
